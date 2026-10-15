@@ -70,7 +70,10 @@ def _trim(stations: list[dict]) -> list[dict]:
     ]
     out = []
     for s in stations:
-        out.append({k: s.get(k) for k in keys})
+        item = {k: s.get(k) for k in keys}
+        if item.get("countrycode") == "TW":
+            item["country"] = "中国台湾"
+        out.append(item)
     return out
 
 

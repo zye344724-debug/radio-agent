@@ -48,7 +48,7 @@ MOOD_KEYWORDS: dict[str, list[str]] = {
 COUNTRY_KEYWORDS: dict[str, list[str]] = {
     "US": ["美国", "美", "usa", "america", "united states"],
     "GB": ["英国", "英", "uk", "britain", "british", "london", "伦敦"],
-    "CN": ["中国", "中", "china", "chinese", "北京", "上海"],
+    "CN": ["中国", "中", "china", "chinese", "北京", "上海", "台湾", "taiwan"],
     "JP": ["日本", "日", "japan", "japanese", "东京", "tokyo"],
     "KR": ["韩国", "韩", "korea", "korean", "首尔", "seoul"],
     "FR": ["法国", "法", "france", "french", "巴黎", "paris"],

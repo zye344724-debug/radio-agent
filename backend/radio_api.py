@@ -78,7 +78,31 @@ def search_stations(
         params["language"] = language
     if tags:
         params["tagList"] = ",".join(tags)
-    return _get("/json/stations/search", params)
+    if countrycode != "CN":
+        return _get("/json/stations/search", params)
+
+    # 地图把台湾地区并入中国选区；Radio Browser 的检索码仍分别为 CN/TW。
+    combined: list[dict[str, Any]] = []
+    last_error: Optional[Exception] = None
+    for code in ("CN", "TW"):
+        try:
+            combined.extend(_get("/json/stations/search", {**params, "countrycode": code}))
+        except Exception as exc:  # 一个地区的接口不可用时仍保留另一个地区的结果
+            last_error = exc
+    if not combined and last_error:
+        raise last_error
+
+    def sort_key(station: dict[str, Any]) -> Any:
+        value = station.get(order)
+        if order in {"votes", "clickcount", "bitrate", "lastcheckok"}:
+            try:
+                return float(value or 0)
+            except (TypeError, ValueError):
+                return 0
+        return str(value or "").lower()
+
+    unique = {s.get("stationuuid") or id(s): s for s in combined}
+    return sorted(unique.values(), key=sort_key, reverse=reverse)[: min(limit, 100)]
 
 
 def get_tags(limit: int = 100) -> list[dict[str, Any]]:

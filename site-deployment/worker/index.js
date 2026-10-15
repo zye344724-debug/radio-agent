@@ -2,7 +2,11 @@ const MIRRORS = ['https://de1.api.radio-browser.info','https://nl1.api.radio-bro
 const KEYS = ['stationuuid','name','url_resolved','url','homepage','favicon','tags','country','countrycode','language','codec','bitrate','votes','clickcount','hls','geo_lat','geo_long'];
 const json = (value,status=200) => new Response(JSON.stringify(value),{status,headers:{'content-type':'application/json; charset=utf-8','cache-control':'no-store'}});
 const limit = (v,max,def) => Math.min(max,Math.max(1,Number(v)||def));
-const trimmed = list => list.map(s=>Object.fromEntries(KEYS.map(k=>[k,s[k]??null])));
+const trimmed = list => list.map(s=>{
+  const item=Object.fromEntries(KEYS.map(k=>[k,s[k]??null]));
+  if(item.countrycode==='TW')item.country='中国台湾';
+  return item;
+});
 const result = list => ({count:list.length,stations:trimmed(list)});
 async function radio(path,params={}) {
   let failure;
@@ -19,12 +23,26 @@ async function radio(path,params={}) {
 }
 async function search(p) {
   const requested = limit(p.limit, 100, 20);
-  const stations = await radio('/json/stations/search', {
+  const params = {
     hidebroken: 'true', order: p.order || 'clickcount', reverse: 'true',
     limit: Math.min(requested * 3, 100), name: p.name || '', tag: p.tag || '',
     tagList: p.tags?.length ? p.tags.join(',') : '',
     countrycode: p.countrycode || '', language: p.language || '',
-  });
+  };
+  let stations;
+  if(p.countrycode==='CN') {
+    const replies=await Promise.allSettled(['CN','TW'].map(countrycode=>radio('/json/stations/search',{...params,countrycode})));
+    stations=replies.flatMap(reply=>reply.status==='fulfilled'?reply.value:[]);
+    if(replies.every(reply=>reply.status==='rejected'))throw replies[0].reason;
+    const seen=new Set();
+    stations=stations.filter(s=>{if(seen.has(s.stationuuid))return false;seen.add(s.stationuuid);return true;});
+    const order=params.order;
+    stations.sort((a,b)=>['votes','clickcount','bitrate','lastcheckok'].includes(order)
+      ? Number(b[order]||0)-Number(a[order]||0)
+      : String(b[order]||'').localeCompare(String(a[order]||'')));
+  } else {
+    stations=await radio('/json/stations/search',params);
+  }
   // 公开站点是 HTTPS；浏览器会拦截 HTTP 音频流。
   return stations.filter(s => /^https:\/\//i.test(s.url_resolved || s.url || '')).slice(0, requested);
 }
@@ -41,7 +59,7 @@ async function recommend(p) {
   return {...result(stations),level,matched:{tags,countrycode,language}};
 }
 const WORDS={jazz:['爵士','jazz'],rock:['摇滚','rock'],classical:['古典','钢琴','classical','piano'],electronic:['电子','电音','electronic','edm','house'],pop:['流行','pop'],'hip hop':['嘻哈','说唱','hip hop','rap'],folk:['民谣','folk'],chillout:['放松','舒缓','轻音乐','chill','ambient'],news:['新闻','news'],blues:['蓝调','blues'],oldies:['老歌','怀旧','经典']};
-const COUNTRIES={US:['美国','usa','america'],GB:['英国','uk','britain'],CN:['中国','china'],JP:['日本','japan','东京'],KR:['韩国','korea'],FR:['法国','france'],DE:['德国','germany'],IT:['意大利','italy'],ES:['西班牙','spain'],BR:['巴西','brazil']};
+const COUNTRIES={US:['美国','usa','america'],GB:['英国','uk','britain'],CN:['中国','china','台湾','taiwan'],JP:['日本','japan','东京'],KR:['韩国','korea'],FR:['法国','france'],DE:['德国','germany'],IT:['意大利','italy'],ES:['西班牙','spain'],BR:['巴西','brazil']};
 const LANGUAGES={chinese:['中文','汉语','国语'],english:['英文','英语'],japanese:['日语','日文'],korean:['韩语','韩文'],french:['法语'],german:['德语'],spanish:['西班牙语']};
 function intent(text='') {
   const low=text.toLowerCase(),hit=words=>words.some(w=>low.includes(w.toLowerCase()));

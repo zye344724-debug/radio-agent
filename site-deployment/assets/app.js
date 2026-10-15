@@ -220,7 +220,7 @@ async function initGlobe() {
     return;
   }
   try {
-    const res = await fetch("/static/data/countries.geojson?v=3");
+    const res = await fetch("/static/data/countries.geojson?v=4");
     countriesData = await res.json();
   } catch (e) {
     console.error("国家数据加载失败", e);
@@ -481,9 +481,16 @@ async function loadCountries() {
   try {
     const res = await fetch(`${API}/api/meta/countries`);
     const countries = await res.json();
-    state.countries = countries;
+    const china = countries.find((c) => c.iso_3166_1 === "CN");
+    const taiwan = countries.find((c) => c.iso_3166_1 === "TW");
+    if (china) {
+      china.name = "中国";
+      if (taiwan) china.stationcount = Number(china.stationcount || 0) + Number(taiwan.stationcount || 0);
+    }
+    const regions = countries.filter((c) => c.iso_3166_1 !== "TW");
+    state.countries = regions;
     const sel = $("#sel-country");
-    sel.innerHTML = '<option value="">🌍 全部国家</option>' + countries
+    sel.innerHTML = '<option value="">🌍 全部国家</option>' + regions
       .slice(0, 80)
       .map((c) => `<option value="${esc(c.iso_3166_1)}">${esc(c.name)} (${c.stationcount})</option>`)
       .join("");
