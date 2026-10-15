@@ -244,6 +244,7 @@ async function initGlobe() {
 
   // 点击国家
   globeMap.on("click", "countries-fill", (e) => {
+    if (globeMap.queryRenderedFeatures(e.point, { layers: ["stations-dot", "stations-label"] }).length) return;
     const f = e.features[0];
     if (!f) return;
     const cc = f.properties.iso2;
@@ -275,10 +276,22 @@ async function initGlobe() {
     const p = e.features[0].properties;
     playStation(p.uuid, p.name, p.url, p.favicon, p.meta);
   });
+  globeMap.on("click", "stations-label", (e) => {
+    // 圆点与文字重叠时，圆点的点击处理已经负责播放。
+    if (globeMap.queryRenderedFeatures(e.point, { layers: ["stations-dot"] }).length) return;
+    const p = e.features[0].properties;
+    playStation(p.uuid, p.name, p.url, p.favicon, p.meta);
+  });
   globeMap.on("mousemove", "stations-dot", () => {
     globeMap.getCanvas().style.cursor = "pointer";
   });
   globeMap.on("mouseleave", "stations-dot", () => {
+    globeMap.getCanvas().style.cursor = "";
+  });
+  globeMap.on("mousemove", "stations-label", () => {
+    globeMap.getCanvas().style.cursor = "pointer";
+  });
+  globeMap.on("mouseleave", "stations-label", () => {
     globeMap.getCanvas().style.cursor = "";
   });
 
@@ -708,7 +721,9 @@ function playStation(uuid, name, url, favicon, meta) {
     cover.textContent = "♪";
   }
   audio.src = url;
-  audio.play().catch(() => toast("自动播放被浏览器拦截，请点击播放按钮", true));
+  audio.play().catch((error) => toast(
+    error?.name === "NotAllowedError" ? "浏览器阻止了自动播放，请点击播放按钮" : "该电台暂时无法播放，请试其他电台", true,
+  ));
 
   document.querySelectorAll(".station-card").forEach((c) => c.classList.remove("playing"));
   const card = document.querySelector(`.station-card[data-uuid="${uuid}"]`);
