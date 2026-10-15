@@ -1,0 +1,14 @@
+.DS_Store
+.Rhistory
+.env
+.env.*
+!.env.example
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.workbuddy/
+.wbapp_*.genie
+public-site/
+dist/
+*.tar.gz
