@@ -46,6 +46,20 @@ async function search(p) {
   // 公开站点是 HTTPS；浏览器会拦截 HTTP 音频流。
   return stations.filter(s => /^https:\/\//i.test(s.url_resolved || s.url || '')).slice(0, requested);
 }
+async function geoStations(countrycode,requested) {
+  const codes=countrycode==='CN'?['CN','TW']:[countrycode];
+  const replies=await Promise.allSettled(codes.map(code=>radio('/json/stations/search',{
+    countrycode:code,has_geo_info:'true',is_https:'true',hidebroken:'true',
+    order:'clickcount',reverse:'true',limit:countrycode==='CN'?Math.ceil(requested/2):requested,
+  })));
+  if(replies.every(reply=>reply.status==='rejected'))throw replies[0].reason;
+  const seen=new Set();
+  return replies.flatMap(reply=>reply.status==='fulfilled'?reply.value:[]).filter(s=>{
+    if(seen.has(s.stationuuid))return false;
+    seen.add(s.stationuuid);
+    return s.geo_lat!=null&&s.geo_long!=null&&Number.isFinite(Number(s.geo_lat))&&Number.isFinite(Number(s.geo_long))&&Math.abs(Number(s.geo_lat))<=90&&Math.abs(Number(s.geo_long))<=180&&/^https:\/\//i.test(s.url_resolved||s.url||'');
+  }).slice(0,requested);
+}
 async function recommend(p) {
   const tags=(p.tags||'').split(',').map(x=>x.trim()).filter(Boolean), countrycode=p.countrycode||'', language=p.language||'';
   const attempts=tags.length?[
@@ -106,7 +120,7 @@ async function api(request,url){
   if(p==='/api/meta/countries')return json(await radio('/json/countries',{order:'stationcount',reverse:'true'}));
   if(p==='/api/meta/languages')return json(await radio('/json/languages',{order:'stationcount',reverse:'true'}));
   if(p==='/api/stations/search')return json(result(await search(q)));
-  if(p==='/api/stations/geo'){const n=limit(q.limit,500,200),list=await search({...q,limit:Math.min(n*2,500)});const geo=list.filter(s=>s.geo_lat!=null&&s.geo_long!=null&&Number.isFinite(Number(s.geo_lat))&&Number.isFinite(Number(s.geo_long))&&Math.abs(Number(s.geo_lat))<=90&&Math.abs(Number(s.geo_long))<=180).slice(0,n);return json(result(geo));}
+  if(p==='/api/stations/geo'){const n=limit(q.limit,500,200);if(q.countrycode&&!q.tag)return json(result(await geoStations(q.countrycode,n)));const list=await search({...q,limit:Math.min(n*2,500)});const geo=list.filter(s=>s.geo_lat!=null&&s.geo_long!=null&&Number.isFinite(Number(s.geo_lat))&&Number.isFinite(Number(s.geo_long))&&Math.abs(Number(s.geo_lat))<=90&&Math.abs(Number(s.geo_long))<=180).slice(0,n);return json(result(geo));}
   if(p==='/api/recommend')return json(await recommend(q));
   if(p==='/api/quotes'){const [key,label]=period(Number(q.hour??new Date().getHours()));return json({period:key,label,source:'preset',quotes:QUOTES[key].map(([text,tags,mood])=>({text,tags,mood}))});}
   if(p==='/api/intent'&&request.method==='POST'){const body=await request.json(),fallback=intent(body.text||'');try{const x=await llm(body.llm,'识别电台需求。只输出 JSON：{"tags":["jazz"],"country":"JP","language":"","mood":""}',body.text||'');return json(x?{...fallback,...x,raw:fallback.raw}:fallback);}catch{return json(fallback);}}

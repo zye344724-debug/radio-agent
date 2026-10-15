@@ -115,6 +115,7 @@ let hoveredCountry = null;
 let stationFadeRaf = null; // 电台点渐入渐出动画句柄
 let stationRequestId = 0;
 let stationVisibility = 1;
+const stationCache = new Map();
 
 // 背景图层在 globe 投影下不构成球面；用面图层给整颗球体铺海洋。
 const oceanData = {
@@ -129,10 +130,10 @@ const oceanData = {
   })),
 };
 
-// 进入国家时显现，继续放大时点和文字一起放大、渐出。
+// 放大时渐显电台点，继续放大后保持可见。
 function stationZoomOpacity(factor) {
   return ["interpolate", ["linear"], ["zoom"],
-    2.4, 0, 3.4, factor, 5.8, factor, 8, 0];
+    2.8, 0, 3.6, factor, 9, factor];
 }
 
 function setStationVisibility(factor) {
@@ -281,28 +282,21 @@ async function initGlobe() {
     globeMap.getCanvas().style.cursor = "";
   });
 
-  // 缩放/平移结束后: 自动识别当前聚焦的国家并加载电台; 缩回全球时清空
+  // 缩放/平移后加载当前屏幕内的国家，不依赖国家选择。
   globeMap.on("moveend", () => {
     const zoom = globeMap.getZoom();
-    if (zoom < 2) {
-      if (currentCountry) {
-        currentCountry = null;
-        $("#globe-title").textContent = "🌍 点击国家，探索电台";
-        $("#globe-legend-text").textContent = "国家";
-        $("#sel-country").value = "";
-        clearStations();
-      }
+    if (zoom < 3.2) {
+      clearStations();
+      $("#globe-title").textContent = "🌍 放大地球，探索电台";
+      $("#globe-legend-text").textContent = "放大后显示电台";
       return;
     }
-    if (zoom >= 3) {
-      const c = countryAtCenter();
-      if (c && (!currentCountry || c.cc !== currentCountry.cc)) {
-        currentCountry = c;
-        $("#globe-title").textContent = `📍 ${c.name}`;
-        $("#sel-country").value = c.cc;
-        loadCountryStations(c.cc);
-      }
-    }
+    $("#globe-title").textContent = "📍 当前地图的电台";
+    // moveend 可能先于新画面完成渲染；等 idle 后再读取可见国家。
+    const moveId = ++stationRequestId;
+    globeMap.once("idle", () => {
+      if (moveId === stationRequestId && globeMap.getZoom() >= 3.2) loadVisibleStations();
+    });
   });
 }
 
@@ -313,47 +307,7 @@ function selectCountry(cc, name, center) {
   if (center) {
     globeMap.flyTo({ center, zoom: 4.6, duration: 1800 });
   }
-  loadCountryStations(cc);
   recommend("", cc, "", `${name} 的热门电台`);
-}
-
-// ---------- 点在多边形内检测 (ray casting) ----------
-// 判断点是否在单个环内
-function pointInRing(lng, lat, ring) {
-  let inside = false;
-  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
-    const xi = ring[i][0], yi = ring[i][1];
-    const xj = ring[j][0], yj = ring[j][1];
-    if ((yi > lat) !== (yj > lat) && lng < (xj - xi) * (lat - yi) / (yj - yi) + xi) {
-      inside = !inside;
-    }
-  }
-  return inside;
-}
-
-// 判断点是否在几何体 (Polygon / MultiPolygon) 内
-function pointInGeometry(lng, lat, geom) {
-  if (!geom) return false;
-  if (geom.type === "Polygon") return pointInRing(lng, lat, geom.coordinates[0]);
-  if (geom.type === "MultiPolygon") {
-    for (const poly of geom.coordinates) {
-      if (pointInRing(lng, lat, poly[0])) return true;
-    }
-  }
-  return false;
-}
-
-// 取当前视口中心点落在的国家 (基于 GeoJSON 数据做点-多边形检测, 不依赖渲染命中)
-function countryAtCenter() {
-  const c = globeMap.getCenter();
-  const lng = c.lng, lat = c.lat;
-  for (const f of countriesData.features) {
-    if (pointInGeometry(lng, lat, f.geometry)) {
-      const p = f.properties;
-      return { cc: p.iso2, name: p.NAME, center: p.center };
-    }
-  }
-  return null;
 }
 
 // 清空电台点 (缩回全球时)
@@ -389,13 +343,38 @@ function setStationsData(features) {
   stationFadeRaf = requestAnimationFrame(out);
 }
 
-async function loadCountryStations(cc) {
+async function loadVisibleStations() {
   const requestId = ++stationRequestId;
+  const codes = [...new Set(globeMap.queryRenderedFeatures({ layers: ["countries-fill"] })
+    .map(f => f.properties?.iso2).filter(Boolean))];
+  if (!codes.length) {
+    setStationsData([]);
+    $("#globe-legend-text").textContent = "当前区域暂无电台";
+    return;
+  }
+  $("#globe-legend-text").textContent = "正在加载电台…";
   try {
-    const res = await fetch(`${API}/api/stations/geo?countrycode=${cc}&limit=200`);
-    const data = await res.json();
-    if (requestId !== stationRequestId || currentCountry?.cc !== cc || globeMap.getZoom() < 2) return;
-    const stations = data.stations || [];
+    // 同一国家只请求一次；旋转地图时复用已取得的点位。
+    const pending = codes.filter(cc => !stationCache.has(cc));
+    for (let i = 0; i < pending.length; i += 6) {
+      await Promise.all(pending.slice(i, i + 6).map(async cc => {
+        try {
+          const res = await fetch(`${API}/api/stations/geo?countrycode=${encodeURIComponent(cc)}&limit=500`);
+          if (!res.ok) throw new Error(`电台接口 ${res.status}`);
+          stationCache.set(cc, (await res.json()).stations || []);
+        } catch (error) {
+          console.error(`加载 ${cc} 电台失败`, error);
+        }
+      }));
+      if (requestId !== stationRequestId) return;
+    }
+    if (requestId !== stationRequestId || globeMap.getZoom() < 3.2) return;
+    const seen = new Set();
+    const stations = codes.flatMap(cc => stationCache.get(cc) || []).filter(s => {
+      if (seen.has(s.stationuuid)) return false;
+      seen.add(s.stationuuid);
+      return true;
+    });
     const features = stations.map((s) => ({
       type: "Feature",
       geometry: { type: "Point", coordinates: [s.geo_long, s.geo_lat] },
@@ -408,9 +387,10 @@ async function loadCountryStations(cc) {
       },
     }));
     setStationsData(features);
-    $("#globe-legend-text").textContent = stations.length ? `${stations.length} 个电台` : "该地区暂无电台";
+    $("#globe-legend-text").textContent = stations.length ? `${stations.length} 个电台` : "当前区域暂无电台";
   } catch (e) {
-    console.error("加载国家电台失败", e);
+    console.error("加载地图电台失败", e);
+    if (requestId === stationRequestId) $("#globe-legend-text").textContent = "电台加载失败，请重试";
   }
 }
 

@@ -127,13 +127,8 @@ def stations_geo(
     order: str = "clickcount",
 ):
     """返回带经纬度的电台, 供前端 3D 地球打点。只保留 geo_lat/geo_long 有效的电台。"""
-    # 多请求一些 (过滤掉无坐标的), 再裁剪到 limit
-    stations = radio_api.search_stations(
-        countrycode=countrycode,
-        tag=tag,
-        limit=min(limit * 2, 500),
-        order=order,
-        reverse=True,
+    stations = radio_api.geo_stations(countrycode, limit) if countrycode and not tag else radio_api.search_stations(
+        countrycode=countrycode, tag=tag, limit=min(limit * 2, 500), order=order, reverse=True,
     )
     geo: list[dict] = []
     for s in _trim(stations):

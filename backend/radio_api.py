@@ -105,6 +105,29 @@ def search_stations(
     return sorted(unique.values(), key=sort_key, reverse=reverse)[: min(limit, 100)]
 
 
+def geo_stations(countrycode: str, limit: int = 500) -> list[dict[str, Any]]:
+    """取得一个国家或地区带坐标的可播放电台，供地图独立加载。"""
+    codes = ("CN", "TW") if countrycode == "CN" else (countrycode,)
+    stations: list[dict[str, Any]] = []
+    last_error: Optional[Exception] = None
+    for code in codes:
+        try:
+            stations.extend(_get("/json/stations/search", {
+                "countrycode": code,
+                "has_geo_info": "true",
+                "is_https": "true",
+                "hidebroken": "true",
+                "order": "clickcount",
+                "reverse": "true",
+                "limit": (limit + 1) // 2 if countrycode == "CN" else limit,
+            }))
+        except Exception as exc:
+            last_error = exc
+    if not stations and last_error:
+        raise last_error
+    return list({s.get("stationuuid") or id(s): s for s in stations}.values())[:limit]
+
+
 def get_tags(limit: int = 100) -> list[dict[str, Any]]:
     """获取标签列表 (附带电台数量, 用于前端筛选热门风格)。"""
     return _get("/json/tags", {"limit": limit, "order": "stationcount", "reverse": "true", "hidebroken": "true"})
