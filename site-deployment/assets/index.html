@@ -4,6 +4,11 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Radio Agent · 全球电台智能推荐</title>
+  <meta name="description" content="旋转 3D 地球，探索全球在线电台。按心情、地区和语言选台，点击地图上的电台即可收听。" />
+  <meta property="og:type" content="website" />
+  <meta property="og:title" content="RadioAgent · 在地球上发现下一家电台" />
+  <meta property="og:description" content="旋转地球，听见世界。探索全球在线电台，找到适合此刻的声音。" />
+  <meta property="og:url" content="https://radio-agent-global-zy.warmoasis1.chatgpt.site/" />
   <link rel="stylesheet" href="/static/vendor/maplibre-gl.css?v=3" />
   <link rel="stylesheet" href="/static/style.css?v=5" />
 </head>
@@ -80,7 +85,7 @@
             <div class="msg bot">
               <div class="avatar">🎧</div>
               <div class="bubble">
-                你好，我是你的电台助手！在地球上点一个国家，或告诉我此刻想听什么：
+                你好，我是你的电台助手！放大地球探索电台，或告诉我此刻想听什么：
                 <div class="hint-row">
                   <span class="hint">深夜想听点爵士</span>
                   <span class="hint">日本的电子乐</span>
@@ -194,7 +199,7 @@
         <button class="modal-close" id="settings-close" title="关闭">✕</button>
       </div>
       <div class="modal-body">
-        <p class="modal-desc">配置你自己的 API Key 后，AI 智能推荐将使用你的额度。Key 仅保存在当前浏览器本地，不会上传或共享。</p>
+        <p class="modal-desc">配置你自己的 API Key 后，AI 功能将使用你的额度。Key 保存在当前浏览器，使用 AI 时会发送到本站服务端，再转发给你配置的模型服务。</p>
         <label class="field-label" for="set-key">API Key</label>
         <input class="field-input" id="set-key" type="password" placeholder="sk-..." autocomplete="off" />
         <label class="field-label" for="set-base">Base URL（可选，默认 DeepSeek）</label>

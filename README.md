@@ -1,76 +1,56 @@
-# Radio Agent · 全球电台智能推荐
+# RadioAgent · 在地球上发现下一家电台
 
-一个 **AI-Native 的音乐电台 Agent**：用自然语言描述需求，自动搜索全球电台并给出个性化推荐，一键播放。
+旋转地球，听见世界。RadioAgent 将全球在线电台放到可交互的 3D 地球上，也能根据一句话、所在地区与此刻的天气推荐适合收听的频道。
 
-> 作品集 Demo —— 展示「自然语言理解 → 结构化检索 → 个性化推荐 → 播放反馈」的完整 Agent 链路。
+**[立即体验公开版](https://radio-agent-global-zy.warmoasis1.chatgpt.site/)**
 
-## 功能
+## 你可以做什么
 
-- 🌍 **全球电台搜索**：接入 [Radio Browser API](https://www.radio-browser.info/)（社区维护、免费免 Key），收录数万个在线电台
-- 💬 **对话式选台**：输入「深夜想听点爵士」「日本的电子乐」「跑步时的嗨曲」等自然语言，自动解析为风格/地区/语言/场景
-- 🎯 **个性化推荐**（规则版）：风格 + 国家 + 语言组合检索，多级降级策略保证总能给出结果
-- ▶️ **在线播放**：HTML5 播放器直接播放电台流
-- 📈 **反馈闭环**：播放时上报点击，反哺 Radio Browser 的推荐排序
+- **探索地图**：旋转、放大地球，自动显示当前区域的电台；点击地图圆点或名称即可播放。
+- **用一句话选台**：试试“深夜想听爵士”或“跑步时听电子乐”，按风格、地区和语言寻找频道。
+- **获得此刻推荐**：结合可选的定位、天气和时间，找到符合当下情境的电台。
+- **按自己的方式浏览**：搜索电台名称、筛选标签与语言，并切换随时间变化的界面主题。
+- **选择 AI 增强**：默认使用规则解析；在设置中填写自己的 API Key 后，可启用兼容 OpenAI 接口的模型辅助理解需求。
 
-## 技术栈
+电台目录来自 [Radio Browser](https://www.radio-browser.info/)。播放地址由各电台提供，部分频道可能因源站失效、浏览器格式支持或地区网络限制而无法播放。地图只展示提供有效坐标的电台，单个国家或地区最多加载 500 个点位。
 
-| 层 | 技术 | 说明 |
-|---|---|---|
-| 后端 | FastAPI | REST API + 静态资源服务 |
-| 数据源 | Radio Browser API | 多镜像自动故障切换 |
-| 意图解析 | 规则关键词映射 | 可无缝替换为 LLM |
-| 前端 | 原生 HTML/CSS/JS | 聊天 + 播放器 + 推荐列表 |
+## 本地运行
 
-## 目录结构
-
-```
-radio-agent/
-├── backend/
-│   ├── main.py        # FastAPI 应用与路由
-│   ├── radio_api.py   # Radio Browser API 封装 (故障切换)
-│   └── intent.py      # 自然语言意图解析 (规则版)
-├── frontend/
-│   ├── index.html     # 页面结构
-│   ├── style.css      # 深色主题样式
-│   └── app.js         # 交互逻辑
-└── requirements.txt
-```
-
-## 运行
+需要 Python 3.9+：
 
 ```bash
-cd radio-agent/backend
-pip install -r ../requirements.txt
-uvicorn main:app --host 0.0.0.0 --port 8000
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+cd backend
+uvicorn main:app --host 127.0.0.1 --port 8000
 ```
 
-浏览器打开 http://localhost:8000
+打开 [http://127.0.0.1:8000/](http://127.0.0.1:8000/)。电台搜索与规则推荐无需 API Key。若要使用模型辅助选台，可在网页设置中填写自己的 Key。本地开发也可以在 `backend/.env` 中配置 `DEEPSEEK_API_KEY`，供后端生成时段文案；对话解析仍以访客自己的 Key 为准。
 
-公开版：[RadioAgent 全球电台](https://radio-agent-global-zy.warmoasis1.chatgpt.site/)。部署源码位于 `site-deployment/`，不包含本机的 `backend/.env`；公开站点的 AI 功能由访客自行填写 API Key。
+## 项目结构
 
-## API 一览
+| 路径 | 内容 |
+| --- | --- |
+| `frontend/` | 原生 HTML、CSS、JavaScript 页面，使用 MapLibre GL 绘制 3D 地球 |
+| `backend/` | 本地 FastAPI 服务、Radio Browser 代理与推荐逻辑 |
+| `site-deployment/` | 公开版部署源码，使用 Cloudflare Worker 提供同源 API 与静态资源 |
 
-| 方法 | 路径 | 说明 |
-|---|---|---|
-| GET | `/api/meta/tags` | 热门风格标签 |
-| GET | `/api/meta/countries` | 国家列表 |
-| GET | `/api/meta/languages` | 语言列表 |
-| GET | `/api/stations/search` | 按名称/标签/国家/语言搜索 |
-| POST | `/api/intent` | 自然语言意图解析 |
-| GET | `/api/recommend` | 个性化推荐（含降级策略） |
-| POST | `/api/click` | 播放点击上报 |
+公开版与本地版使用同一套前端。播放流直接来自电台源站；搜索、地理点位和推荐通过本站 API 获取。
 
-## 个性化推荐策略
+## 关于 API Key
 
-1. 多标签（AND）+ 国家 + 语言 全命中
-2. 去掉语言约束
-3. 去掉国家约束
-4. 单标签降级
-5. 全局热门兜底
+网页设置中的 Key 保存在当前浏览器的本地存储中。使用 AI 功能时，Key 会随请求发送到本站服务端，再由服务端转发给所配置的模型服务；仓库不包含任何私有 Key。不填写 Key 也可以使用地图、搜索、播放和规则推荐。
 
-## 后续可扩展方向
+## 主要接口
 
-- 接入 LLM（如 DeepSeek/GPT）替换规则意图解析，支持更模糊的情绪/场景表达
-- 用户偏好记忆（本地 localStorage 或后端存储）
-- 播放历史与「猜你喜欢」协同过滤
-- 电台可用性健康检查与自动跳过失效源
+| 方法 | 路径 | 用途 |
+| --- | --- | --- |
+| `GET` | `/api/stations/search` | 搜索电台 |
+| `GET` | `/api/stations/geo` | 获取地图电台点位 |
+| `GET` | `/api/recommend` | 按风格、地区与语言推荐 |
+| `POST` | `/api/intent` | 解析自然语言需求 |
+| `POST` | `/api/personalize` | 根据位置、天气和时间推荐 |
+| `GET` | `/api/meta/tags`、`/api/meta/countries`、`/api/meta/languages` | 筛选数据 |
+
+这是一个持续完善中的个人项目。欢迎通过 Issue 反馈电台播放、地图显示和使用体验问题。
